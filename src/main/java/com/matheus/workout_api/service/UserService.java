@@ -39,11 +39,12 @@ public class UserService {
     @Transactional
     public User updateUser(UUID userId, User updatedUser){
         User user = this.getUserById(userId);
-        if (!user.getEmail().equals(updatedUser.getEmail())
-                && userRepository.existsByEmail(updatedUser.getEmail())) {
-            throw new EmailAlreadyExistsException();
+        if (!user.getEmail().equals(updatedUser.getEmail())) {
+            if (userRepository.existsByEmail(updatedUser.getEmail())) {
+                throw new EmailAlreadyExistsException();
+            }
+            user.setEmail(updatedUser.getEmail());
         }
-        user.setEmail(updatedUser.getEmail());
         user.setName(updatedUser.getName());
         user.setPassword(updatedUser.getPassword());
         user.setHeight(updatedUser.getHeight());
