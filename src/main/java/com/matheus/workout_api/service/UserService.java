@@ -1,8 +1,11 @@
 package com.matheus.workout_api.service;
 
+import com.matheus.workout_api.dto.CreateUserRequest;
+import com.matheus.workout_api.dto.UpdateUserRequest;
 import com.matheus.workout_api.entity.User;
 import com.matheus.workout_api.exception.EmailAlreadyExistsException;
 import com.matheus.workout_api.exception.UserNotFoundException;
+import com.matheus.workout_api.mapper.UserMapper;
 import com.matheus.workout_api.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
@@ -20,10 +23,11 @@ public class UserService {
     }
 
     @Transactional
-    public User createUser(User user){
-        if(userRepository.existsByEmail(user.getEmail())){
+    public User createUser(CreateUserRequest request){
+        if(userRepository.existsByEmail(request.getEmail())){
             throw new EmailAlreadyExistsException();
         }
+        User user = UserMapper.toEntity(request);
         return userRepository.save(user);
     }
 
@@ -37,20 +41,31 @@ public class UserService {
     }
 
     @Transactional
-    public User updateUser(UUID userId, User updatedUser){
-        User user = this.getUserById(userId);
-        if (!user.getEmail().equals(updatedUser.getEmail())) {
-            if (userRepository.existsByEmail(updatedUser.getEmail())) {
-                throw new EmailAlreadyExistsException();
-            }
-            user.setEmail(updatedUser.getEmail());
+    public User updateUser(UUID userId, UpdateUserRequest request){
+        User existingUser = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        if (request.getName() != null) {
+            existingUser.setName(request.getName());
         }
-        user.setName(updatedUser.getName());
-        user.setPassword(updatedUser.getPassword());
-        user.setHeight(updatedUser.getHeight());
-        user.setWeight(updatedUser.getWeight());
-        user.setGoal(updatedUser.getGoal());
-        return userRepository.save(user);
+
+        if (request.getGoal() != null) {
+            existingUser.setGoal(request.getGoal());
+        }
+
+        if (request.getHeight() != null) {
+            existingUser.setHeight(request.getHeight());
+        }
+
+        if (request.getWeight() != null) {
+            existingUser.setWeight(request.getWeight());
+        }
+
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            existingUser.setPassword(request.getPassword());
+        }
+
+        return userRepository.save(existingUser);
     }
 
     @Transactional
