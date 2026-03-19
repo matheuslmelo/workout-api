@@ -19,7 +19,9 @@ public class User {
     @Column(name = "email",unique = true)
     private String email;
 
-    @JsonIgnore
+    @Column(name = "age")
+    private int age;
+
     @Column(name = "password_hash")
     private String password;
 
@@ -35,9 +37,10 @@ public class User {
     public User() {
     }
 
-    public User(String name, String email, String password, double height, double weight, String goal) {
+    public User(String name, String email, int age, String password, double height, double weight, String goal) {
         this.name = name;
         this.email = email;
+        this.age = age;
         this.password = password;
         this.height = height;
         this.weight = weight;
@@ -62,6 +65,14 @@ public class User {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public void setAge(int age) {
+        this.age = age;
     }
 
     public String getPassword() {

@@ -1,6 +1,8 @@
 package com.matheus.workout_api.service;
 
 import com.matheus.workout_api.builders.UserTestDataBuilder;
+import com.matheus.workout_api.dto.CreateUserRequest;
+import com.matheus.workout_api.dto.UpdateUserRequest;
 import com.matheus.workout_api.entity.User;
 import com.matheus.workout_api.exception.EmailAlreadyExistsException;
 import com.matheus.workout_api.exception.UserNotFoundException;
@@ -13,15 +15,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class UserServiceTest {
+class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
@@ -31,12 +35,15 @@ public class UserServiceTest {
 
     private UUID userId;
     private User user;
+    private CreateUserRequest createUserRequest;
+    private UpdateUserRequest updateUserRequest;
 
     @BeforeEach
     void setUp() {
-
         userId = UUID.randomUUID();
         user = new UserTestDataBuilder().build();
+        createUserRequest = new UserTestDataBuilder().buildCreateRequest();
+        updateUserRequest = new UserTestDataBuilder().buildUpdateRequest();
     }
 
     private User buildUser(String name, String email) {
@@ -47,190 +54,172 @@ public class UserServiceTest {
     }
 
     @Nested
+    @DisplayName("Get user by id")
     class GetByUserIdTest {
 
         @Test
-        @DisplayName("Should return an user when id is valid")
-        public void shouldReturnUserWhenUserIdIsValid() {
-
+        @DisplayName("Should return a user when id is valid")
+        void shouldReturnUserWhenUserIdIsValid() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
             User result = userService.getUserById(userId);
 
             assertNotNull(result);
-            assertEquals("Matheus", result.getName());
+            assertEquals(user.getName(), result.getName());
+            assertEquals(user.getEmail(), result.getEmail());
+
+            verify(userRepository).findById(userId);
+            verifyNoMoreInteractions(userRepository);
         }
 
         @Test
-        @DisplayName("Should throw UserNotFoundException when id is invalid on getting an user")
-        public void shouldThrowExceptionWhenUserIdIsInvalid() {
-
-            when(userRepository.findById(userId))
-                    .thenReturn(Optional.empty());
+        @DisplayName("Should throw UserNotFoundException when id is invalid")
+        void shouldThrowExceptionWhenUserIdIsInvalid() {
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
             assertThrows(UserNotFoundException.class, () -> userService.getUserById(userId));
+
             verify(userRepository).findById(userId);
+            verifyNoMoreInteractions(userRepository);
         }
     }
 
-
     @Nested
-    class CreateUserTest{
+    @DisplayName("Create user")
+    class CreateUserTest {
 
         @Test
-        @DisplayName("Should throw EmailAlreadyExistsException when email is already registered on creating a new user")
-        public void shouldThrowExceptionWhenEmailAlreadyExistsOnCreateUser() {
+        @DisplayName("Should throw EmailAlreadyExistsException when email is already registered")
+        void shouldThrowExceptionWhenEmailAlreadyExistsOnCreateUser() {
+            when(userRepository.existsByEmail(createUserRequest.getEmail())).thenReturn(true);
 
-            when(userRepository.existsByEmail(user.getEmail())).thenReturn(true);
+            assertThrows(EmailAlreadyExistsException.class, () -> userService.createUser(createUserRequest));
 
-            assertThrows(EmailAlreadyExistsException.class, () -> userService.createUser(user));
-            verify(userRepository).existsByEmail(user.getEmail());
+            verify(userRepository).existsByEmail(createUserRequest.getEmail());
+            verify(userRepository, never()).save(any(User.class));
+            verifyNoMoreInteractions(userRepository);
         }
 
         @Test
         @DisplayName("Should save a new user when email is not registered yet")
-        public void shouldSaveUserWhenEmailIsNew() {
+        void shouldSaveUserWhenEmailIsNew() {
+            when(userRepository.existsByEmail(createUserRequest.getEmail())).thenReturn(false);
+            when(userRepository.save(any(User.class))).thenReturn(user);
 
-            when(userRepository.existsByEmail(user.getEmail())).thenReturn(false);
-            when(userRepository.save(user)).thenReturn(user);
-
-            User result = userService.createUser(user);
+            User result = userService.createUser(createUserRequest);
 
             assertNotNull(result);
-            assertEquals(user.getEmail(),result.getEmail());
-            verify(userRepository).existsByEmail(user.getEmail());
-            verify(userRepository).save(user);
+            assertEquals(user.getName(), result.getName());
+            assertEquals(user.getEmail(), result.getEmail());
+
+            verify(userRepository).existsByEmail(createUserRequest.getEmail());
+            verify(userRepository).save(any(User.class));
+            verifyNoMoreInteractions(userRepository);
         }
     }
 
-
     @Nested
-    class GetAllUsersTest{
+    @DisplayName("Get all users")
+    class GetAllUsersTest {
 
         @Test
         @DisplayName("Should retrieve all users if they exist")
-        public void shouldReturnAllUsers() {
+        void shouldReturnAllUsers() {
+            User anotherUser = buildUser("João", "joao@gmail.com");
+            List<User> users = List.of(user, anotherUser);
 
-            User anotherUser = buildUser("joão","joao@gmail.com");
-            List<User> users = List.of(user,anotherUser);
             when(userRepository.findAll()).thenReturn(users);
 
             List<User> result = userService.getAllUsers();
 
             assertNotNull(result);
-            assertEquals(2,result.size());
+            assertEquals(2, result.size());
+            assertEquals(users, result);
+
             verify(userRepository).findAll();
+            verifyNoMoreInteractions(userRepository);
         }
 
         @Test
-        @DisplayName("Should return an empty list of users if there are no users on database")
-        public void shouldReturnEmptyListWhenNoUsers() {
-
+        @DisplayName("Should return an empty list when there are no users")
+        void shouldReturnEmptyListWhenNoUsers() {
             when(userRepository.findAll()).thenReturn(Collections.emptyList());
 
             List<User> result = userService.getAllUsers();
 
             assertNotNull(result);
             assertTrue(result.isEmpty());
+
             verify(userRepository).findAll();
+            verifyNoMoreInteractions(userRepository);
         }
     }
 
     @Nested
-    @DisplayName("Should update an user if email did not change")
-    class UpdateUserTest{
+    @DisplayName("Update user")
+    class UpdateUserTest {
 
         @Test
-        public void shouldUpdateUserWhenEmailDidNotChange(){
+        @DisplayName("Should update a user successfully")
+        void shouldUpdateUser() {
+            User existingUser = buildUser("Matheus", "matheus@gmail.com");
 
-            User updatedUser = buildUser("Matheus Melo","matheus@gmail.com");
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(userRepository.save(user)).thenReturn(user);
+            UpdateUserRequest request = new UpdateUserRequest();
+            request.setName("Matheus Melo");
 
-            User result = userService.updateUser(userId,updatedUser);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
+            when(userRepository.save(existingUser)).thenReturn(existingUser);
+
+            User result = userService.updateUser(userId, request);
 
             assertNotNull(result);
             assertEquals("Matheus Melo", result.getName());
-            assertEquals(user.getEmail(), result.getEmail());
+            assertEquals("matheus@gmail.com", result.getEmail());
+
             verify(userRepository).findById(userId);
-            verify(userRepository).save(user);
-            verify(userRepository,never()).existsByEmail(anyString());
-        }
-
-        @Test
-        @DisplayName("Should update an user if email changed but it is currently available")
-        public void shouldUpdateUserWhenEmailChangedAndAvailable(){
-
-            User existingUser = user;
-            User updatedUser = buildUser("Matheus Melo","melomath@gmail.com");
-            when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
-            when(userRepository.existsByEmail(updatedUser.getEmail())).thenReturn(false);
-            when(userRepository.save(existingUser)).thenReturn(existingUser);
-
-            User result = userService.updateUser(userId,updatedUser);
-
-            assertNotNull(result);
-            assertEquals(updatedUser.getEmail(),result.getEmail());
-            verify(userRepository).findById(userId);
-            verify(userRepository).existsByEmail(updatedUser.getEmail());
             verify(userRepository).save(existingUser);
+            verifyNoMoreInteractions(userRepository);
         }
 
         @Test
-        @DisplayName("Should throw UserNotFoundException if userId is invalid on update")
-        public void shouldThrowExceptionWhenUserIdIsInvalidOnUpdate(){
-
-            User updatedUser = buildUser("Matheus Melo","matheus@gmail.com");
+        @DisplayName("Should throw UserNotFoundException when user id is invalid on update")
+        void shouldThrowExceptionWhenUserIdIsInvalidOnUpdate() {
             when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-            assertThrows(UserNotFoundException.class, () -> userService.updateUser(userId,updatedUser));
+            assertThrows(UserNotFoundException.class, () -> userService.updateUser(userId, updateUserRequest));
 
             verify(userRepository).findById(userId);
             verify(userRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("Should throw EmailAlreadyExistsException if userId is invalid on update")
-        public void shouldThrowExceptionWhenEmailAlreadyExistsOnUpdate(){
-            User existingUser = buildUser("Matheus","old@gmail.com");
-            User updatedUser = buildUser("Matheus Melo","matheus@gmail.com");
-            when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
-            when(userRepository.existsByEmail(updatedUser.getEmail())).thenReturn(true);
-
-            assertThrows(EmailAlreadyExistsException.class, () -> userService.updateUser(userId,updatedUser));
-            verify(userRepository).findById(userId);
-            verify(userRepository).existsByEmail(updatedUser.getEmail());
-            verify(userRepository, never()).save(any());
+            verifyNoMoreInteractions(userRepository);
         }
     }
 
     @Nested
-    @DisplayName("Should delete a valid user sucessfully")
-    class DeleteUserTest{
+    @DisplayName("Delete user")
+    class DeleteUserTest {
 
         @Test
-        public void shouldDeleteUserWhenUserExists(){
-
+        @DisplayName("Should delete a user when it exists")
+        void shouldDeleteUserWhenUserExists() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
             userService.deleteUser(userId);
 
             verify(userRepository).findById(userId);
             verify(userRepository).delete(user);
+            verifyNoMoreInteractions(userRepository);
         }
 
         @Test
-        @DisplayName("Should throw UserNotFoundException if userId is invalid on delete")
-        public void shouldThrowExceptionWhenUserNotFoundOnDelete(){
-
+        @DisplayName("Should throw UserNotFoundException when user id is invalid on delete")
+        void shouldThrowExceptionWhenUserNotFoundOnDelete() {
             when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-            assertThrows(UserNotFoundException.class,
-                    () -> userService.deleteUser(userId));
+            assertThrows(UserNotFoundException.class, () -> userService.deleteUser(userId));
 
             verify(userRepository).findById(userId);
             verify(userRepository, never()).delete(any());
+            verifyNoMoreInteractions(userRepository);
         }
     }
-
 }
